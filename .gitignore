@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+uploads/
+.env
+.DS_Store
+Devplan
+*.log\n*.tsbuildinfo\n.env.local
+/src/generated/prisma
