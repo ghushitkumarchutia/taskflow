@@ -29,13 +29,13 @@ services:
 
   api:
     build:
-      context: .
+      context: ./server
       target: production
     command: npm run start:api
     ports:
       - "3000:3000"
     env_file:
-      - .env
+      - ./server/.env
     volumes:
       - uploads_data:/app/uploads
     environment:
@@ -49,11 +49,11 @@ services:
 
   worker:
     build:
-      context: .
+      context: ./server
       target: production
     command: npm run start:worker
     env_file:
-      - .env
+      - ./server/.env
     volumes:
       - uploads_data:/app/uploads
     environment:
