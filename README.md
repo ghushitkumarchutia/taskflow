@@ -1,11 +1,13 @@
 <p align="center">
   <h1 align="center">⚡ TaskFlow</h1>
   <p align="center">
-    A distributed background job processing system built with Node.js, BullMQ, Redis, and PostgreSQL.
+    A distributed background job processing engine with a real-time React dashboard.<br />
+    Built with Node.js, BullMQ, Redis, PostgreSQL, React, and Vite.
   </p>
   <p align="center">
     <a href="#-quick-start">Quick Start</a> •
     <a href="#-architecture">Architecture</a> •
+    <a href="#-dashboard">Dashboard</a> •
     <a href="#-api-reference">API Reference</a> •
     <a href="#-job-types">Job Types</a> •
     <a href="#-monitoring">Monitoring</a> •
@@ -19,6 +21,8 @@
 
 TaskFlow decouples expensive, time-consuming work from HTTP request handlers. Instead of making a user wait while the server sends an email, generates a report, or resizes an image, the API immediately accepts the request, queues the work, and responds in milliseconds. A separate Worker process picks up the job from the queue and processes it in the background — with automatic retries, exponential backoff, real-time progress streaming, and dead letter queuing for unrecoverable failures.
 
+The project ships with a **full-featured React dashboard** for monitoring jobs, managing queues, and creating new jobs — all with real-time SSE streaming and a modern, responsive UI.
+
 This is the same architectural pattern used by **Stripe** (payment processing), **Shopify** (order fulfillment), and **Atlassian** (background indexing).
 
 <br />
@@ -26,17 +30,17 @@ This is the same architectural pattern used by **Stripe** (payment processing), 
 ## 🏗️ Architecture
 
 ```
-┌─────────────┐       ┌─────────────┐       ┌─────────────────┐
-│   Client    │──────▶│ Express API │──────▶│   PostgreSQL    │
-│  (Postman)  │◀──────│ (Producer)  │       │  (Job Record)   │
-└─────────────┘  HTTP └──────┬──────┘       └─────────────────┘
-                             │ queue.add()           ▲
-                             ▼                       │ status update
-                      ┌─────────────┐                │
-                      │    Redis    │       ┌──────-──────────┐
-                      │   (BullMQ)  │──────▶│  Worker Process │
-                      └─────────────┘ poll  │   (Consumer)    │
-                                            └─────────────────┘
+┌──────────────────┐       ┌─────────────┐       ┌─────────────────┐
+│  React Dashboard │──────▶│ Express API │──────▶│   PostgreSQL    │
+│   (Vite + TW4)   │◀──SSE─│ (Producer)  │       │  (Job Record)   │
+└──────────────────┘  HTTP └──────┬──────┘       └─────────────────┘
+                                  │ queue.add()           ▲
+                                  ▼                       │ status update
+                           ┌─────────────┐                │
+                           │    Redis    │       ┌────────────────┐
+                           │   (BullMQ)  │──────▶│ Worker Process │
+                           └─────────────┘ poll  │   (Consumer)   │
+                                                 └────────────────┘
 ```
 
 **Three distinct roles** — never blurred:
@@ -53,6 +57,8 @@ The API and Worker are **separate Node.js processes**. They share no memory, no 
 
 ## 🛠️ Tech Stack
 
+### Backend (`server/`)
+
 | Technology         | Purpose                                                                                         |
 | ------------------ | ----------------------------------------------------------------------------------------------- |
 | **Node.js 20+**    | Non-blocking I/O runtime — ideal for network-heavy queue operations                             |
@@ -66,7 +72,26 @@ The API and Worker are **separate Node.js processes**. They share no memory, no 
 | **Sharp**          | High-performance native image processing via libvips                                            |
 | **Nodemailer**     | Email dispatch with Ethereal test accounts                                                      |
 | **Bull Board**     | Real-time visual queue monitoring dashboard                                                     |
-| **Docker Compose** | Single-command reproducible development environment                                             |
+
+### Frontend (`client/`)
+
+| Technology              | Purpose                                                              |
+| ----------------------- | -------------------------------------------------------------------- |
+| **React 19**            | Component-based UI with concurrent rendering                         |
+| **Vite 8**              | Lightning-fast dev server with HMR and optimized production builds   |
+| **TypeScript 6**        | Full type safety across all components, hooks, and API interactions  |
+| **Tailwind CSS 4**      | Utility-first CSS with `@theme` design tokens and dark mode support  |
+| **TanStack Query 5**    | Server-state management with automatic caching and background refetch|
+| **React Router 7**      | Client-side routing with nested layouts                              |
+| **Lucide React**        | Consistent, tree-shakeable SVG icon library                          |
+| **React Hot Toast**     | Lightweight, accessible toast notifications                          |
+
+### Infrastructure
+
+| Technology         | Purpose                                                     |
+| ------------------ | ----------------------------------------------------------- |
+| **Docker Compose** | Single-command reproducible development environment          |
+| **npm Workspaces** | Monorepo orchestration with `--prefix` script delegation     |
 
 <br />
 
@@ -82,8 +107,8 @@ The API and Worker are **separate Node.js processes**. They share no memory, no 
 ```bash
 git clone https://github.com/ghushitkumarchutia/taskflow.git
 cd taskflow
-cp .env.example .env
-docker-compose up --build
+cp server/.env.example server/.env
+docker compose up --build
 ```
 
 This starts **four services**: PostgreSQL, Redis, API (port `3000`), and Worker (2 replicas).
@@ -91,19 +116,24 @@ This starts **four services**: PostgreSQL, Redis, API (port `3000`), and Worker 
 ### Option 2 — Local Development
 
 ```bash
-# 1. Install dependencies
-npm install
+# 1. Start PostgreSQL and Redis
+docker compose up -d postgres redis
 
-# 2. Start PostgreSQL and Redis
-docker-compose up postgres redis -d
+# 2. Install dependencies
+cd server && npm install && cd ..
+cd client && npm install && cd ..
 
-# 3. Run database migrations
-cp .env.example .env
+# 3. Configure environment
+cp server/.env.example server/.env
+cp client/.env.example client/.env
+
+# 4. Run database migrations
 npm run prisma:migrate
 
-# 4. Start API and Worker in separate terminals
+# 5. Start API, Worker, and Client in separate terminals
 npm run dev:api
 npm run dev:worker
+npm run dev:client
 ```
 
 ### Verify
@@ -114,7 +144,38 @@ curl http://localhost:3000/health
 
 # Expected response:
 # { "status": "UP", "services": { "database": "HEALTHY", "redis": "HEALTHY" } }
+
+# Dashboard
+# Open http://localhost:5173 in your browser
 ```
+
+<br />
+
+## 📱 Dashboard
+
+The React dashboard provides a complete visual interface for managing the TaskFlow engine.
+
+### Pages
+
+| Page             | Route                | Description                                                   |
+| ---------------- | -------------------- | ------------------------------------------------------------- |
+| **Landing**      | `/`                  | Product overview with feature highlights and call-to-action    |
+| **Dashboard**    | `/dashboard`         | Real-time overview with job counts, queue stats, and health    |
+| **Jobs**         | `/dashboard/jobs`    | Paginated job list with status, type, and priority filters     |
+| **Job Detail**   | `/dashboard/jobs/:id`| Full job details with SSE live progress streaming              |
+| **Create Job**   | `/dashboard/jobs/new`| Form to submit new jobs with type-specific payload fields      |
+| **Dead Letters** | `/dashboard/dead-letter` | Inspect and retry jobs that exhausted all retry attempts   |
+| **Queues**       | `/dashboard/queues`  | Per-queue statistics with pause/resume/drain controls          |
+
+### Key Frontend Features
+
+- **Real-Time SSE Streaming** — Job progress updates via Server-Sent Events without polling
+- **TanStack Query Caching** — Automatic background refetching with stale-while-revalidate strategy
+- **Responsive Layout** — Collapsible sidebar with mobile-friendly navigation
+- **Status Badges** — Color-coded job status indicators (queued, processing, completed, failed)
+- **Toast Notifications** — Instant feedback on job creation, retries, and queue actions
+- **Empty States** — Helpful illustrations when no data is available
+- **Dark Theme** — Modern dark UI with Tailwind CSS v4 `@theme` design tokens
 
 <br />
 
@@ -318,26 +379,58 @@ Single `Job` model with composite indexes for high-performance queries:
 
 ```
 taskflow/
-├── src/
-│   ├── api/          # Express HTTP server setup and Bull Board integration
-│   ├── config/       # Environment variables, constants, and Prisma configuration
-│   ├── controllers/  # Request handlers for jobs, queues, and health checks
-│   ├── jobs/         # Core business logic implementations for each job type
-│   ├── middleware/   # Request validation, API authentication, and error handling
-│   ├── queues/       # BullMQ instances, Redis connections, and queue workers
-│   ├── routes/       # API endpoint definitions and routing
-│   ├── schemas/      # Zod validation schemas for request payloads
-│   ├── services/     # Shared business logic, cache, and database operations
-│   ├── tests/        # Unit and integration tests
-│   ├── types/        # TypeScript interfaces and type definitions
-│   └── worker.ts     # Standalone worker process entry point
-├── prisma/           # Database schema and migration histories
-└── [Config Files]    # Docker, package.json, tsconfig, env configs, etc.
+├── client/                     # React frontend (Vite + Tailwind CSS v4)
+│   ├── src/
+│   │   ├── api/                # Fetch wrapper with auth and error handling
+│   │   ├── assets/             # Static images and SVGs
+│   │   ├── components/
+│   │   │   ├── jobs/           # JobsTable, JobFilters, JobDetailCard, CreateJobForm
+│   │   │   ├── layout/         # Navbar, Sidebar, Layout shell
+│   │   │   ├── queues/         # QueueStatsGrid, QueueControls
+│   │   │   └── ui/             # StatusBadge, ProgressBar, Modal, Pagination, etc.
+│   │   ├── hooks/              # useJobs, useQueues, useHealth, useJobStream (SSE)
+│   │   ├── pages/              # Landing, Dashboard, Jobs, JobDetail, Queues, etc.
+│   │   ├── types/              # TypeScript interfaces matching backend DTOs
+│   │   ├── App.tsx             # Router configuration
+│   │   ├── main.tsx            # React entry point
+│   │   └── index.css           # Tailwind v4 @theme design tokens
+│   ├── .env.example            # VITE_API_URL, VITE_API_KEY
+│   ├── index.html              # SEO-optimized HTML entry
+│   ├── vite.config.ts          # Vite config with API proxy
+│   └── package.json
+│
+├── server/                     # Node.js backend (Express + BullMQ)
+│   ├── src/
+│   │   ├── api/                # Express HTTP server setup and Bull Board integration
+│   │   ├── config/             # Environment variables, constants, and Prisma config
+│   │   ├── controllers/        # Request handlers for jobs, queues, and health checks
+│   │   ├── jobs/               # Core business logic for each job type
+│   │   ├── middleware/         # Request validation, API auth, and error handling
+│   │   ├── queues/             # BullMQ instances, Redis connections, and workers
+│   │   ├── routes/             # API endpoint definitions and routing
+│   │   ├── schemas/            # Zod validation schemas for request payloads
+│   │   ├── services/           # Shared logic, cache, and database operations
+│   │   ├── tests/              # Unit tests (Jest + ts-jest)
+│   │   ├── types/              # TypeScript interfaces and type definitions
+│   │   └── worker.ts           # Standalone worker process entry point
+│   ├── prisma/                 # Database schema and migration history
+│   ├── Dockerfile              # Multi-stage build (builder → production)
+│   ├── .dockerignore           # Docker build exclusions
+│   └── package.json
+│
+├── docker-compose.yml          # Orchestrates PostgreSQL, Redis, API, and Worker
+├── package.json                # Root workspace with delegating scripts
+├── .env.example                # Backend environment variable template
+├── .gitignore                  # Root-level Git exclusions
+├── LICENSE                     # MIT License
+└── README.md
 ```
 
 <br />
 
 ## ⚙️ Environment Variables
+
+### Server (`server/.env`)
 
 | Variable       | Required | Default       | Description                           |
 | -------------- | -------- | ------------- | ------------------------------------- |
@@ -347,13 +440,20 @@ taskflow/
 | `PORT`         | ❌       | `3000`        | HTTP server port                      |
 | `NODE_ENV`     | ❌       | `development` | `development` · `production` · `test` |
 
+### Client (`client/.env`)
+
+| Variable       | Required | Default                  | Description             |
+| -------------- | -------- | ------------------------ | ----------------------- |
+| `VITE_API_URL` | ✅       | `http://localhost:3000`  | Backend API base URL    |
+| `VITE_API_KEY` | ✅       | `dev_api_key_secret`     | API authentication key  |
+
 <br />
 
 ## 🐳 Docker
 
 ### Multi-Stage Build
 
-The Dockerfile uses a two-stage build:
+The `server/Dockerfile` uses a two-stage build:
 
 1. **Builder** — installs all dependencies, generates Prisma client, compiles TypeScript
 2. **Production** — copies only compiled JS and production dependencies, runs as non-root `nodejs` user
@@ -364,23 +464,42 @@ The Dockerfile uses a two-stage build:
 | ---------- | -------------------------- | ------------------------- |
 | `postgres` | `postgres:16-alpine`       | Persistent job storage    |
 | `redis`    | `redis:7-alpine`           | Queue backend + cache     |
-| `api`      | Custom build               | HTTP API server           |
+| `api`      | Custom build (`server/`)   | HTTP API server           |
 | `worker`   | Custom build (×2 replicas) | Background job processing |
 
 ### Scaling Workers
 
 ```bash
-docker-compose up --scale worker=5
+docker compose up --scale worker=5
 ```
 
 All worker containers connect to the same Redis queue. BullMQ distributes jobs atomically — no two workers ever process the same job.
 
 <br />
 
+## 🧩 Available Scripts
+
+All commands can be run from the **project root** via npm workspace delegation:
+
+| Command                  | Description                                    |
+| ------------------------ | ---------------------------------------------- |
+| `npm run dev:api`        | Start API server with hot-reload (tsx watch)   |
+| `npm run dev:worker`     | Start worker with hot-reload (tsx watch)       |
+| `npm run dev:client`     | Start React dev server (Vite, port 5173)       |
+| `npm run start:api`      | Start compiled API server (production)         |
+| `npm run start:worker`   | Start compiled worker (production)             |
+| `npm run build:server`   | Compile backend TypeScript to `server/dist/`   |
+| `npm run build:client`   | Build frontend for production                  |
+| `npm run prisma:migrate` | Run Prisma database migrations                 |
+| `npm run prisma:generate`| Generate Prisma client                         |
+| `npm run test:server`    | Run backend unit tests (Jest)                  |
+
+<br />
+
 ## 🧪 Testing
 
 ```bash
-npm test
+npm run test:server
 ```
 
 Tests use Jest with ESM support and mock Prisma, Nodemailer, and Axios for isolated unit testing of job processors.
@@ -391,11 +510,14 @@ Tests use Jest with ESM support and mock Prisma, Nodemailer, and Axios for isola
 
 | Decision                                  | Rationale                                                                            |
 | ----------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Monorepo with npm workspaces**         | Single repo for backend + frontend with independent dependency trees                 |
 | **Separate API and Worker processes**     | Independent scaling, isolated failure domains, zero-downtime deployments             |
 | **PostgreSQL + Redis dual storage**       | Redis for fast operational queue state; PostgreSQL for durable, queryable history    |
 | **BullMQ connection options for Workers** | Workers use blocking Redis commands — each requires its own connection               |
 | **Shared connection for Queues**          | Queue instances only use non-blocking commands — safe to share                       |
 | **SSE over WebSockets**                   | Unidirectional server→client push — simpler, no special proxy config needed          |
+| **TanStack Query for server state**       | Automatic caching, background refetch, and stale-while-revalidate strategy           |
+| **Tailwind CSS v4 @theme tokens**         | Centralized design system with CSS custom properties for consistent theming          |
 | **Exponential backoff**                   | Prevents thundering herd on downstream service failures                              |
 | **Dead letter queue**                     | Failed jobs are preserved for inspection, never silently dropped                     |
 | **Cache-aside for reports**               | Deterministic cache keys with sorted filters; 1-hour TTL matches data freshness      |
